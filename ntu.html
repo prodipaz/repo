@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Estimator Warna berdasarkan Turbidity</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:#f6f8fa;margin:0;padding:20px;display:flex;justify-content:center;min-height:100vh}
+    .container{max-width:800px;width:100%}
+    .tabs{display:flex;border-bottom:2px solid #e5e7eb;margin-bottom:20px}
+    .tab{flex:1;text-align:center;padding:10px;font-weight:600;cursor:pointer;border-radius:8px 8px 0 0}
+    .tab.active{background:#fff;border:1px solid #e5e7eb;border-bottom:none}
+    .card{background:white;border-radius:0 0 12px 12px;box-shadow:0 6px 20px rgba(16,24,40,0.08);padding:20px}
+    h1{font-size:18px;margin:0 0 8px}
+    p.sub{margin:0 0 16px;color:#475569}
+    label{display:block;margin-bottom:6px;font-weight:600}
+    input[type=number], textarea{width:100%;padding:10px;border:1px solid #e6e9ee;border-radius:8px;font-size:16px}
+    textarea{min-height:80px;font-family:monospace;resize:vertical}
+    .result{margin-top:16px;padding:14px;background:#f1f5f9;border-radius:8px}
+    .small{font-size:13px;color:#64748b}
+    .method{margin-top:8px;font-size:13px;color:#334155}
+    .recommend{margin-top:10px;font-size:13px;color:#0f172a;background:#e0f2fe;padding:10px;border-radius:8px}
+    .default-info{margin-top:10px;font-size:13px;color:#475569;background:#fef9c3;padding:10px;border-radius:8px}
+    footer{margin-top:20px;font-size:12px;color:#94a3b8;text-align:center}
+    .hidden{display:none}
+    code{background:#f1f5f9;padding:2px 4px;border-radius:4px;color:#334155}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="tabs">
+      <div class="tab active" id="tab1-btn">PERHITUNGAN</div>
+      <div class="tab" id="tab2-btn">METODE</div>
+    </div>
+
+    <div class="card" id="tab1">
+      <h1>Estimator Warna (PtCo) dari Turbidity (NTU)</h1>
+      <p class="sub">Masukkan nilai turbidity. Hasil akan muncul otomatis berdasarkan pola/data acuan.</p>
+
+      <label for="turb">Turbidity (NTU)</label>
+      <input id="turb" type="number" step="any" min="0" value="3.0" />
+
+      <div class="result" id="out" aria-live="polite">
+        <div><span class="small">Hasil:</span> <span id="color" style="font-size:20px;font-weight:700">-</span> <span class="small">PtCo</span></div>
+        <div class="method" id="method">Metode: -</div>
+        <div class="small" id="note">Catatan: Untuk turbidity rendah (<= 22.5 NTU) digunakan fit khusus dari contoh-contoh kecil yang Anda berikan. Untuk nilai di atas itu, digunakan interpolasi/ekstrapolasi dari data referensi.</div>
+      </div>
+
+      <div class="recommend">
+        🔎 Rekomendasi: Untuk hasil estimasi yang lebih optimal dan stabil, gunakan setidaknya <strong>30–50 titik data referensi</strong> yang tersebar merata dari turbidity rendah hingga tinggi. Semakin banyak titik acuan, semakin baik akurasi interpolasi.
+      </div>
+
+      <div style="margin-top:16px">
+        <label for="refInput">Data Referensi (format: turbidity-warna, pisahkan dengan koma atau baris baru)</label>
+        <textarea id="refInput" placeholder="Contoh:\n0.94-6, 1.39-7, 2.58-9"></textarea>
+        <small class="small">Jika dikosongkan, akan digunakan data referensi default.</small>
+      </div>
+
+      <div class="default-info">
+        📌 Data referensi default yang digunakan:<br>
+        0.94-6, 1.39-7, 2.58-9, 3.15-13, 5.90-25
+      </div>
+    </div>
+
+    <div class="card hidden" id="tab2">
+      <h1>Metode Perhitungan</h1>
+      <p>Aplikasi ini menggunakan kombinasi metode untuk mengestimasi warna (PtCo) dari turbidity (NTU). Berikut detailnya:</p>
+      <ol>
+        <li><strong>Fit Linear pada Rentang Rendah</strong><br>
+          <p>Pada nilai turbidity rendah (≤ 22.5 NTU), data acuan relatif sedikit. Untuk menjaga konsistensi, digunakan pendekatan <em>linear regression</em> sederhana yang didapat dari contoh-contoh kecil.</p>
+          <p>Rumus persamaan linier yang digunakan adalah:</p>
+          <p><code>Warna = 2.5225 × Turbidity + 0.9899</code></p>
+          <p>Artinya setiap kenaikan 1 NTU pada rentang rendah akan menambah warna sekitar 2.52 PtCo. Persamaan ini diperoleh dengan metode <em>least squares fitting</em> terhadap data kecil yang tersedia.</p>
+          <p><strong>Contoh:</strong> Jika turbidity = 3.0 NTU, maka warna ≈ 2.5225 × 3.0 + 0.9899 = 8.56 ≈ <strong>9 PtCo</strong>.</p>
+        </li>
+        <li><strong>Interpolasi Linier</strong><br>
+          <p>Untuk nilai turbidity yang berada di antara dua titik data referensi, digunakan <em>linear interpolation</em>. Metode ini menghitung nilai tengah secara proporsional berdasarkan jarak antar titik.</p>
+          <p>Rumus umum interpolasi linier:</p>
+          <p><code>Warna = C1 + ( (T - T1) / (T2 - T1) ) × (C2 - C1)</code></p>
+          <ul>
+            <li>T = nilai turbidity yang dicari</li>
+            <li>T1, C1 = data acuan pertama (turbidity, warna)</li>
+            <li>T2, C2 = data acuan kedua</li>
+          </ul>
+          <p><strong>Contoh:</strong> Untuk T = 3 NTU dengan data referensi 2.58-9 dan 3.15-13:<br>
+            Warna = 9 + ((3 - 2.58) / (3.15 - 2.58)) × (13 - 9)<br>
+            = 9 + (0.42 / 0.57) × 4<br>
+            ≈ 9 + 2.95 = 11.95 ≈ <strong>12 PtCo</strong>.
+          </p>
+        </li>
+        <li><strong>Ekstrapolasi Linier</strong><br>
+          <p>Jika nilai turbidity lebih besar daripada data maksimum acuan, digunakan <em>linear extrapolation</em>. Metode ini memperpanjang garis lurus dari dua titik data terakhir.</p>
+          <p>Rumus umum ekstrapolasi linier sama dengan interpolasi, hanya saja T berada di luar rentang (T > T2).</p>
+          <p><strong>Contoh:</strong> Jika T = 10 NTU dengan data referensi terakhir 3.15-13 dan 5.90-25:<br>
+            Warna = 13 + ((10 - 3.15) / (5.90 - 3.15)) × (25 - 13)<br>
+            = 13 + (6.85 / 2.75) × 12<br>
+            ≈ 13 + 29.88 = 42.88 ≈ <strong>43 PtCo</strong>.
+          </p>
+        </li>
+      </ol>
+      <p>Dengan kombinasi metode ini (fit linier, interpolasi, ekstrapolasi), aplikasi mampu menyesuaikan estimasi warna secara fleksibel sesuai ketersediaan data.</p>
+    </div>
+
+    <footer>
+      © Credit: @214 07 525
+    </footer>
+  </div>
+
+  <script>
+    // default reference dataset
+    const defaultRef = [
+      {t:0.94, c:6},
+      {t:1.39, c:7},
+      {t:2.58, c:9},
+      {t:3.15, c:13},
+      {t:5.90, c:25}
+    ];
+
+    let ref = [...defaultRef];
+
+    const m_small = 2.52252282;
+    const b_small = 0.98990902;
+
+    function parseRefInput(){
+      const text = document.getElementById('refInput').value.trim();
+      if(!text){
+        ref = [...defaultRef];
+        return;
+      }
+      const pairs = text.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean);
+      const parsed = [];
+      for(const p of pairs){
+        const [ts, cs] = p.split('-').map(x=>x.trim());
+        const t = parseFloat(ts);
+        const c = parseFloat(cs);
+        if(!isNaN(t) && !isNaN(c)){
+          parsed.push({t,c});
+        }
+      }
+      if(parsed.length>0){
+        ref = parsed.sort((a,b)=>a.t-b.t);
+      } else {
+        ref = [...defaultRef];
+      }
+    }
+
+    function interpColor(t){
+      if (typeof t !== 'number' || !isFinite(t) || t < 0) return null;
+      const t_min_ref = ref[0].t;
+      if (t <= t_min_ref){
+        const raw = m_small * t + b_small;
+        return {color: Math.round(raw), method: 'fit-low-range'};
+      }
+      for (let i=0;i<ref.length-1;i++){
+        const a = ref[i];
+        const b = ref[i+1];
+        if (t >= a.t && t <= b.t){
+          const ratio = (t - a.t) / (b.t - a.t);
+          const raw = a.c + ratio * (b.c - a.c);
+          return {color: Math.round(raw), method: `interpolasi ${a.t}-${b.t}`};
+        }
+      }
+      const n = ref.length;
+      const p1 = ref[n-2];
+      const p2 = ref[n-1];
+      const slope = (p2.c - p1.c) / (p2.t - p1.t);
+      const raw = p2.c + slope * (t - p2.t);
+      return {color: Math.round(raw), method: `ekstrapolasi ${p1.t}-${p2.t}`};
+    }
+
+    function update(){
+      parseRefInput();
+      const v = parseFloat(document.getElementById('turb').value);
+      const colorEl = document.getElementById('color');
+      const methodEl = document.getElementById('method');
+
+      const res = interpColor(v);
+      if (!res){
+        colorEl.textContent = '-';
+        methodEl.textContent = 'Masukkan nilai turbidity valid (>= 0)';
+        return;
+      }
+      colorEl.textContent = res.color;
+      methodEl.textContent = 'Metode: ' + (res.method === 'fit-low-range' ? 'fit rentang rendah (contoh kecil Anda)' : res.method);
+    }
+
+    document.getElementById('turb').addEventListener('input', update);
+    document.getElementById('refInput').addEventListener('input', update);
+    window.addEventListener('DOMContentLoaded', update);
+
+    // tab switching
+    const tab1Btn = document.getElementById('tab1-btn');
+    const tab2Btn = document.getElementById('tab2-btn');
+    const tab1 = document.getElementById('tab1');
+    const tab2 = document.getElementById('tab2');
+
+    tab1Btn.addEventListener('click', ()=>{
+      tab1Btn.classList.add('active');
+      tab2Btn.classList.remove('active');
+      tab1.classList.remove('hidden');
+      tab2.classList.add('hidden');
+    });
+
+    tab2Btn.addEventListener('click', ()=>{
+      tab2Btn.classList.add('active');
+      tab1Btn.classList.remove('active');
+      tab2.classList.remove('hidden');
+      tab1.classList.add('hidden');
+    });
+  </script>
+</body>
+</html>
