@@ -151,49 +151,47 @@ echo [✓] Extraction successful.
 echo.
 
 :: -------------------------------------------------------
-:: 6. ADD TO PATH (SAFE NO-TRUNCATE)
+:: 6. ADD TO PATH (SIMPLE, SAFE, NO TRUNCATION)
 :: -------------------------------------------------------
-set "addPath=%FFMPEG_BIN%"
-echo [*] Adding FFmpeg to PATH safely...
-echo [*] Adding FFmpeg to PATH safely... >> "%LOGFILE%"
+set "ADD_PATH=C:\ffmpeg\bin"
+echo [3/5] Adding %ADD_PATH% to PATH...
+echo.
 
-if "%IS_ADMIN%"=="1" (
-    echo     Adding to SYSTEM PATH...
-    for /f "tokens=2*" %%A in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul') do set "SysPath=%%B"
-    echo !SysPath! | findstr /i /c:"%addPath%" >nul
-    if !errorlevel! equ 1 (
-        set "NewPath=!SysPath!;%addPath%"
-        reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path /t REG_EXPAND_SZ /d "!NewPath!" /f >nul
-        if !errorlevel! equ 0 (
-            echo [✓] Added to SYSTEM PATH.
-            echo [✓] Added to SYSTEM PATH. >> "%LOGFILE%"
+:: Detect Admin rights
+net session >nul 2>&1
+if %errorlevel%==0 (
+    echo [*] Running as Administrator - modifying SYSTEM PATH...
+    for /f "tokens=2*" %%A in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul') do set "CURRENT_SYS_PATH=%%B"
+    if not defined CURRENT_SYS_PATH set "CURRENT_SYS_PATH="
+    echo %CURRENT_SYS_PATH% | findstr /i /c:"%ADD_PATH%" >nul
+    if %errorlevel% neq 0 (
+        set "NEW_SYS_PATH=%CURRENT_SYS_PATH%;%ADD_PATH%"
+        reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path /t REG_EXPAND_SZ /d "%NEW_SYS_PATH%" /f >nul 2>&1
+        if %errorlevel%==0 (
+            echo [✓] Added %ADD_PATH% to SYSTEM PATH.
+            echo [!] You may need to restart or open a new CMD window.
         ) else (
-            echo [X] Failed to modify SYSTEM PATH.
-            echo [X] Failed to modify SYSTEM PATH. >> "%LOGFILE%"
+            echo [X] Failed to update SYSTEM PATH.
         )
     ) else (
-        echo [i] Already in SYSTEM PATH.
-        echo [i] Already in SYSTEM PATH. >> "%LOGFILE%"
+        echo [i] %ADD_PATH% already exists in SYSTEM PATH.
     )
 ) else (
-    echo     Adding to USER PATH...
-    for /f "tokens=2*" %%A in ('reg query "HKCU\Environment" /v Path 2^>nul') do set "UserPath=%%B"
-    if not defined UserPath set "UserPath=%PATH%"
-    echo !UserPath! | findstr /i /c:"%addPath%" >nul
-    if !errorlevel! equ 1 (
-        set "NewUserPath=!UserPath!;%addPath%"
-        reg add "HKCU\Environment" /v Path /t REG_EXPAND_SZ /d "!NewUserPath!" /f >nul
-        if !errorlevel! equ 0 (
-            echo [✓] Added to USER PATH.
-            echo [✓] Added to USER PATH. >> "%LOGFILE%"
-            echo [!] Please open a NEW Command Prompt to apply changes.
+    echo [*] Running as Standard User - modifying USER PATH...
+    for /f "tokens=2*" %%A in ('reg query "HKCU\Environment" /v Path 2^>nul') do set "CURRENT_USER_PATH=%%B"
+    if not defined CURRENT_USER_PATH set "CURRENT_USER_PATH=%PATH%"
+    echo %CURRENT_USER_PATH% | findstr /i /c:"%ADD_PATH%" >nul
+    if %errorlevel% neq 0 (
+        set "NEW_USER_PATH=%CURRENT_USER_PATH%;%ADD_PATH%"
+        reg add "HKCU\Environment" /v Path /t REG_EXPAND_SZ /d "%NEW_USER_PATH%" /f >nul 2>&1
+        if %errorlevel%==0 (
+            echo [✓] Added %ADD_PATH% to USER PATH.
+            echo [!] Please open a NEW Command Prompt to apply the change.
         ) else (
             echo [X] Failed to update USER PATH.
-            echo [X] Failed to update USER PATH. >> "%LOGFILE%"
         )
     ) else (
-        echo [i] Already in USER PATH.
-        echo [i] Already in USER PATH. >> "%LOGFILE%"
+        echo [i] %ADD_PATH% already exists in USER PATH.
     )
 )
 echo.
