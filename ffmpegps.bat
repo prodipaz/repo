@@ -1,8 +1,8 @@
 @echo off
 setlocal enabledelayedexpansion
-title FFmpeg Auto Installer (No PowerShell Required)
+title FFmpeg Auto Installer (Enhanced PowerShell Check + Fallback)
 echo ======================================================
-echo         FFmpeg Auto Installer (with Fallback)
+echo       FFmpeg Auto Installer (with PowerShell Check)
 echo ======================================================
 echo.
 
@@ -14,8 +14,8 @@ set "DOWNLOAD_DIR=C:\ffmpegdownload"
 set "FFMPEG_ZIP=%DOWNLOAD_DIR%\ffmpeg-release-essentials.zip"
 set "INSTALL_DIR=C:\ffmpeg"
 set "FFMPEG_BIN=%INSTALL_DIR%\bin"
-set "TMP_PS1=%TEMP%\add_ffmpeg_to_path.ps1"
-set "PWSH_EXE="
+set "PWSH_PATH=C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+set "PWSH_EXE=powershell.exe"
 
 ::-------------------------------------------------------
 :: 1. CHECK ADMIN RIGHTS
@@ -31,18 +31,24 @@ if %errorlevel%==0 (
 echo.
 
 ::-------------------------------------------------------
-:: 2. DETECT OR ENABLE POWERSHELL
+:: 2. CHECK POWERSHELL
 ::-------------------------------------------------------
-where powershell >nul 2>&1 && set "PWSH_EXE=powershell"
-if "%PWSH_EXE%"=="" if exist "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" (
-    set "PWSH_EXE=C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+echo [*] Checking PowerShell...
+%PWSH_EXE% -Command "Write-Host 'PowerShell OK'" >nul 2>&1
+if %errorlevel% neq 0 (
+    if exist "%PWSH_PATH%" (
+        echo [i] Found PowerShell at: %PWSH_PATH%
+        set "PATH=%PATH%;C:\Windows\System32\WindowsPowerShell\v1.0"
+        set "PWSH_EXE=%PWSH_PATH%"
+    ) else (
+        echo [!] PowerShell not found. Will continue using fallback methods.
+        set "PWSH_EXE="
+    )
 )
-
 if "%PWSH_EXE%"=="" (
-    echo [!] PowerShell not found on PATH.
-    echo [!] Will use fallback methods for download and extract.
+    echo [⚠] PowerShell unavailable — will use bitsadmin/tar fallback.
 ) else (
-    echo [✓] PowerShell available: %PWSH_EXE%
+    echo [✓] PowerShell ready: %PWSH_EXE%
 )
 echo.
 
