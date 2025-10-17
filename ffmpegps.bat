@@ -1,8 +1,8 @@
 @echo off
 setlocal enabledelayedexpansion
-title FFmpeg Auto Installer (Enhanced PowerShell Check + Fallback)
+title FFmpeg Auto Installer (Fixed Extraction + PowerShell Check)
 echo ======================================================
-echo       FFmpeg Auto Installer (with PowerShell Check)
+echo     FFmpeg Auto Installer (Fixed Extraction Logic)
 echo ======================================================
 echo.
 
@@ -91,21 +91,35 @@ if exist "%FFMPEG_ZIP%" (
 echo.
 
 ::-------------------------------------------------------
-:: 5. EXTRACT FFMPEG
+:: 5. EXTRACT FFMPEG (FIXED)
 ::-------------------------------------------------------
 echo [2/5] Extracting FFmpeg to %INSTALL_DIR% ...
 if exist "%INSTALL_DIR%" rmdir /s /q "%INSTALL_DIR%"
 
 if not "%PWSH_EXE%"=="" (
     "%PWSH_EXE%" -NoProfile -ExecutionPolicy Bypass -Command ^
-        "Expand-Archive -Force -Path '%FFMPEG_ZIP%' -DestinationPath '%INSTALL_DIR%'"
+        "Expand-Archive -Force -Path '%FFMPEG_ZIP%' -DestinationPath '%DOWNLOAD_DIR%'"
 ) else (
     echo [!] PowerShell not available, using tar fallback...
-    tar -xf "%FFMPEG_ZIP%" -C "C:\" >nul 2>&1
-    for /d %%i in ("C:\ffmpeg-*") do (
-        move "%%i" "%INSTALL_DIR%" >nul 2>&1
-    )
+    tar -xf "%FFMPEG_ZIP%" -C "%DOWNLOAD_DIR%" >nul 2>&1
 )
+
+:: Find extracted folder inside download directory
+set "EXTRACTED_DIR="
+for /d %%i in ("%DOWNLOAD_DIR%\ffmpeg-*") do (
+    set "EXTRACTED_DIR=%%i"
+)
+
+if not defined EXTRACTED_DIR (
+    echo [X] Could not find extracted folder in %DOWNLOAD_DIR%.
+    pause
+    exit /b
+)
+
+echo [i] Moving files from !EXTRACTED_DIR! to %INSTALL_DIR% ...
+mkdir "%INSTALL_DIR%" >nul 2>&1
+xcopy "!EXTRACTED_DIR!\*" "%INSTALL_DIR%\" /e /i /h /y >nul
+rmdir /s /q "!EXTRACTED_DIR!"
 
 if not exist "%INSTALL_DIR%\bin\ffmpeg.exe" (
     echo [X] Extraction failed.
