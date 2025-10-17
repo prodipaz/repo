@@ -1,8 +1,8 @@
 @echo off
 setlocal enabledelayedexpansion
-title FFmpeg Auto Installer (Debug Safe Version)
+title FFmpeg Auto Installer (Auto PATH Version)
 echo ======================================================
-echo           FFmpeg Auto Installer (Stable Build)
+echo             FFmpeg Auto Installer (Auto PATH)
 echo ======================================================
 echo.
 
@@ -10,22 +10,25 @@ echo.
 :: CONFIGURATION
 ::-------------------------------------------------------
 set "FFMPEG_URL=https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
-set "FFMPEG_ZIP=%TEMP%\ffmpeg-release-essentials.zip"
+set "DOWNLOAD_DIR=C:\ffmpegdownload"
+set "FFMPEG_ZIP=%DOWNLOAD_DIR%\ffmpeg-release-essentials.zip"
 set "INSTALL_DIR=C:\ffmpeg"
 set "FFMPEG_BIN=%INSTALL_DIR%\bin"
 set "PWSH_EXE=powershell.exe"
-set "PWSH_PATH=C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
 set "TMP_PS1=%TEMP%\add_ffmpeg_to_path.ps1"
 
 ::-------------------------------------------------------
-:: 1. ADMIN CHECK
+:: 1. CHECK ADMIN RIGHTS
 ::-------------------------------------------------------
 net session >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [!] Please run this script as Administrator.
-    pause
-    exit /b
+if %errorlevel%==0 (
+    set "IS_ADMIN=1"
+    echo [✓] Running as Administrator.
+) else (
+    set "IS_ADMIN=0"
+    echo [i] Running as Standard User.
 )
+echo.
 
 ::-------------------------------------------------------
 :: 2. CHECK POWERSHELL
@@ -33,47 +36,53 @@ if %errorlevel% neq 0 (
 echo [*] Checking PowerShell...
 %PWSH_EXE% -Command "Write-Host 'PowerShell OK'" >nul 2>&1
 if %errorlevel% neq 0 (
-    if exist "%PWSH_PATH%" (
-        echo [i] Found PowerShell at: %PWSH_PATH%
-        set "PATH=%PATH%;C:\Windows\System32\WindowsPowerShell\v1.0"
-        set "PWSH_EXE=%PWSH_PATH%"
-    ) else (
-        echo [X] PowerShell not found. Please install it first.
-        pause
-        exit /b
-    )
+    echo [X] PowerShell not found. Please install PowerShell first.
+    pause
+    exit /b
 )
 echo [✓] PowerShell ready.
 echo.
 
 ::-------------------------------------------------------
-:: 3. DOWNLOAD FFMPEG
+:: 3. ENSURE DOWNLOAD DIRECTORY
 ::-------------------------------------------------------
-echo [1/5] Downloading FFmpeg stable build...
-if exist "%FFMPEG_ZIP%" del "%FFMPEG_ZIP%" >nul 2>&1
-
-"%PWSH_EXE%" -Command ^
-    "Write-Host '  -> Downloading...';" ^
-    "Invoke-WebRequest '%FFMPEG_URL%' -OutFile '%FFMPEG_ZIP%' -UseBasicParsing;" ^
-    "if (Test-Path '%FFMPEG_ZIP%') {Write-Host '  -> Download complete.'} else {Write-Host '  -> Download failed.'; exit 1}"
-
-if %errorlevel% neq 0 (
-    echo [X] Download failed. Check your internet connection.
-    pause
-    exit /b
+if not exist "%DOWNLOAD_DIR%" (
+    echo [*] Creating download folder: %DOWNLOAD_DIR%
+    mkdir "%DOWNLOAD_DIR%" >nul 2>&1
 )
+echo [✓] Download folder ready: %DOWNLOAD_DIR%
+echo.
 
 ::-------------------------------------------------------
-:: 4. EXTRACT FFMPEG
+:: 4. DOWNLOAD FFMPEG IF NEEDED
+::-------------------------------------------------------
+if exist "%FFMPEG_ZIP%" (
+    echo [i] Found existing FFmpeg ZIP: %FFMPEG_ZIP%
+    echo [✓] Skipping download.
+) else (
+    echo [1/5] Downloading FFmpeg stable build...
+    "%PWSH_EXE%" -Command ^
+        "Write-Host '  -> Downloading...';" ^
+        "Invoke-WebRequest '%FFMPEG_URL%' -OutFile '%FFMPEG_ZIP%' -UseBasicParsing;" ^
+        "if (Test-Path '%FFMPEG_ZIP%') {Write-Host '  -> Download complete.'} else {Write-Host '  -> Download failed.'; exit 1}"
+    if %errorlevel% neq 0 (
+        echo [X] Download failed. Check your internet connection.
+        pause
+        exit /b
+    )
+)
+echo.
+
+::-------------------------------------------------------
+:: 5. EXTRACT FFMPEG
 ::-------------------------------------------------------
 echo [2/5] Extracting FFmpeg to %INSTALL_DIR% ...
 if exist "%INSTALL_DIR%" rmdir /s /q "%INSTALL_DIR%"
 
 "%PWSH_EXE%" -NoProfile -ExecutionPolicy Bypass -Command ^
-    "Expand-Archive -Force -Path '%FFMPEG_ZIP%' -DestinationPath '%INSTALL_DIR%' ;" ^
-    "Write-Host '  -> Extracted archive.'"
+    "Expand-Archive -Force -Path '%FFMPEG_ZIP%' -DestinationPath '%INSTALL_DIR%'; Write-Host '  -> Extracted archive.'"
 
-:: Handle unknown folder name (ffmpeg-*-essentials_build)
+:: Detect extracted folder (it’s usually ffmpeg-*-essentials_build)
 set "EXTRACTED_DIR="
 for /d %%i in ("%INSTALL_DIR%\ffmpeg-*") do (
     set "EXTRACTED_DIR=%%i"
@@ -90,36 +99,51 @@ if defined EXTRACTED_DIR (
 )
 
 ::-------------------------------------------------------
-:: 5. ADD TO SYSTEM PATH (SAFE)
+:: 6. ADD TO PATH (AUTO MODE)
 ::-------------------------------------------------------
-echo [3/5] Adding FFmpeg to system PATH...
-
+echo [3/5] Adding FFmpeg to PATH...
 set "ESC_BIN=%FFMPEG_BIN:\=\\%>"
+set "addPath=%FFMPEG_BIN%"
 
-> "%TMP_PS1%" (
-    echo $ffpath = "%ESC_BIN%"
-    echo $envPath = [Environment]::GetEnvironmentVariable('Path','Machine')
-    echo if (-not ($envPath -match [regex]::Escape($ffpath))) {
-    echo     [Environment]::SetEnvironmentVariable('Path', $envPath + ';' + $ffpath, 'Machine')
-    echo     Write-Host "[✓] Added $ffpath to system PATH"
-    echo } else {
-    echo     Write-Host "[i] FFmpeg already in system PATH"
-    echo }
+if "%IS_ADMIN%"=="1" (
+    echo [*] Admin detected → Adding to SYSTEM PATH...
+
+    > "%TMP_PS1%" (
+        echo $ffpath = "%ESC_BIN%"
+        echo $envPath = [Environment]::GetEnvironmentVariable('Path','Machine')
+        echo if (-not ($envPath -match [regex]::Escape($ffpath))) {
+        echo     [Environment]::SetEnvironmentVariable('Path', $envPath + ';' + $ffpath, 'Machine')
+        echo     Write-Host "[✓] Added $ffpath to SYSTEM PATH"
+        echo } else {
+        echo     Write-Host "[i] FFmpeg already in SYSTEM PATH"
+        echo }
+    )
+
+    "%PWSH_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%TMP_PS1%"
+    del "%TMP_PS1%" >nul 2>&1
+
+) else (
+    echo [*] Standard user → Adding to USER PATH...
+
+    echo %PATH% | findstr /i /c:"%addPath%" >nul
+    if %errorlevel% equ 1 (
+        echo Adding "%addPath%" to your USER PATH environment variable...
+        setx PATH "%PATH%;%addPath%"
+        if %errorlevel% equ 0 (
+            echo [✓] Successfully added to USER PATH.
+            echo IMPORTANT: You must open a NEW Command Prompt window for the changes to take effect.
+        ) else (
+            echo [X] Failed to update USER PATH.
+        )
+    ) else (
+        echo [i] The path "%addPath%" is already in your USER PATH.
+    )
 )
-
-"%PWSH_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%TMP_PS1%"
-del "%TMP_PS1%" >nul 2>&1
-
-if %errorlevel% neq 0 (
-    echo [!] Failed to modify system PATH.
-    pause
-    exit /b
-)
-
-::-------------------------------------------------------
-:: 6. VERIFY INSTALLATION
-::-------------------------------------------------------
 echo.
+
+::-------------------------------------------------------
+:: 7. VERIFY INSTALLATION
+::-------------------------------------------------------
 echo [4/5] Verifying installation...
 cmd /c "ffmpeg -version"
 if %errorlevel% neq 0 (
@@ -129,15 +153,14 @@ if %errorlevel% neq 0 (
 )
 
 ::-------------------------------------------------------
-:: 7. CLEANUP
+:: 8. DONE
 ::-------------------------------------------------------
 echo.
-echo [5/5] Cleaning up...
-del "%FFMPEG_ZIP%" >nul 2>&1
-
-echo.
+echo [5/5] All steps completed successfully!
+echo [i] FFmpeg ZIP saved at: %FFMPEG_ZIP%
+echo [i] Installed in: %INSTALL_DIR%
 echo ======================================================
-echo [DONE] FFmpeg installed successfully in: %INSTALL_DIR%
+echo [DONE] FFmpeg installation finished successfully!
 echo ======================================================
 pause
 exit /b
