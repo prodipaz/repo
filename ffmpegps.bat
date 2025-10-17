@@ -1,8 +1,8 @@
 @echo off
-setlocal enabledelayedexpansion
-title FFmpeg Auto Installer (Stable Release)
+setlocal
+title FFmpeg Auto Installer (Safe PATH Version)
 echo ======================================================
-echo              FFmpeg Auto Installer
+echo              FFmpeg Auto Installer (Safe)
 echo ======================================================
 echo.
 
@@ -15,6 +15,7 @@ set "INSTALL_DIR=C:\ffmpeg"
 set "FFMPEG_BIN=%INSTALL_DIR%\bin"
 set "PWSH_EXE=powershell.exe"
 set "PWSH_PATH=C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+set "TMP_PS1=%TEMP%\add_ffmpeg_to_path.ps1"
 
 ::-------------------------------------------------------
 :: 1. ADMIN CHECK
@@ -27,9 +28,8 @@ if %errorlevel% neq 0 (
 )
 
 ::-------------------------------------------------------
-:: 2. CHECK POWERSHELL AVAILABILITY
+:: 2. CHECK POWERSHELL
 ::-------------------------------------------------------
-echo [✓] Checking PowerShell availability...
 %PWSH_EXE% -Command "Write-Host 'PowerShell OK'" >nul 2>&1
 if %errorlevel% neq 0 (
     if exist "%PWSH_PATH%" (
@@ -56,7 +56,7 @@ echo [1/5] Downloading FFmpeg stable build...
 )
 
 ::-------------------------------------------------------
-:: 4. EXTRACT
+:: 4. EXTRACT FFMPEG
 ::-------------------------------------------------------
 echo [2/5] Extracting FFmpeg...
 if exist "%INSTALL_DIR%" rmdir /s /q "%INSTALL_DIR%"
@@ -69,20 +69,23 @@ if defined EXTRACTED_DIR (
 )
 
 ::-------------------------------------------------------
-:: 5. ADD TO SYSTEM PATH (fixed)
+:: 5. ADD TO SYSTEM PATH (SAFE METHOD)
 ::-------------------------------------------------------
 echo [3/5] Adding FFmpeg to system PATH...
 
-"%PWSH_EXE%" -NoProfile -ExecutionPolicy Bypass -Command ^
-"[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;" ^
-"$ffpath='%FFMPEG_BIN%';" ^
-"$envPath=[Environment]::GetEnvironmentVariable('Path','Machine');" ^
-"if(-not($envPath -match [regex]::Escape($ffpath))){" ^
-"    [Environment]::SetEnvironmentVariable('Path',$envPath+';'+$ffpath,'Machine');" ^
-"    Write-Host '[✓] Added ' $ffpath ' to system PATH';" ^
-"}else{" ^
-"    Write-Host '[i] FFmpeg already in system PATH';" ^
-"}"
+> "%TMP_PS1%" (
+    echo $ffpath = "%FFMPEG_BIN%"
+    echo $envPath = [Environment]::GetEnvironmentVariable('Path','Machine')
+    echo if (-not ($envPath -match [regex]::Escape($ffpath))) {
+    echo     [Environment]::SetEnvironmentVariable('Path', $envPath + ';' + $ffpath, 'Machine')
+    echo     Write-Host "[✓] Added $ffpath to system PATH"
+    echo } else {
+    echo     Write-Host "[i] FFmpeg already in system PATH"
+    echo }
+)
+
+"%PWSH_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%TMP_PS1%"
+del "%TMP_PS1%" >nul 2>&1
 
 if %errorlevel% neq 0 (
     echo [!] Failed to modify system PATH.
