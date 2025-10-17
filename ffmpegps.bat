@@ -1,8 +1,8 @@
 @echo off
 setlocal enabledelayedexpansion
-title FFmpeg Auto Installer (Fixed Extraction + PowerShell Check)
+title FFmpeg Auto Installer (Stable + Persistent)
 echo ======================================================
-echo     FFmpeg Auto Installer (Fixed Extraction Logic)
+echo       FFmpeg Auto Installer for Windows 11
 echo ======================================================
 echo.
 
@@ -22,11 +22,11 @@ set "PWSH_EXE=powershell.exe"
 ::-------------------------------------------------------
 net session >nul 2>&1
 if %errorlevel%==0 (
-    set "IS_ADMIN=1"
     echo [✓] Running as Administrator.
+    set "IS_ADMIN=1"
 ) else (
+    echo [i] Running as Standard User (PATH will be added to user only).
     set "IS_ADMIN=0"
-    echo [i] Running as Standard User.
 )
 echo.
 
@@ -41,19 +41,19 @@ if %errorlevel% neq 0 (
         set "PATH=%PATH%;C:\Windows\System32\WindowsPowerShell\v1.0"
         set "PWSH_EXE=%PWSH_PATH%"
     ) else (
-        echo [!] PowerShell not found. Will continue using fallback methods.
+        echo [X] PowerShell not found — fallback to bitsadmin/tar.
         set "PWSH_EXE="
     )
 )
 if "%PWSH_EXE%"=="" (
-    echo [⚠] PowerShell unavailable — will use bitsadmin/tar fallback.
+    echo [⚠] PowerShell unavailable.
 ) else (
     echo [✓] PowerShell ready: %PWSH_EXE%
 )
 echo.
 
 ::-------------------------------------------------------
-:: 3. ENSURE DOWNLOAD DIRECTORY
+:: 3. PREPARE DOWNLOAD FOLDER
 ::-------------------------------------------------------
 if not exist "%DOWNLOAD_DIR%" (
     echo [*] Creating download folder: %DOWNLOAD_DIR%
@@ -66,67 +66,78 @@ echo.
 :: 4. DOWNLOAD FFMPEG
 ::-------------------------------------------------------
 if exist "%FFMPEG_ZIP%" (
-    echo [i] Found existing FFmpeg ZIP, skipping download.
+    echo [i] FFmpeg ZIP already exists at %FFMPEG_ZIP%
 ) else (
-    echo [1/5] Downloading FFmpeg...
+    echo [1/5] Downloading FFmpeg package...
     if not "%PWSH_EXE%"=="" (
         "%PWSH_EXE%" -Command "Invoke-WebRequest '%FFMPEG_URL%' -OutFile '%FFMPEG_ZIP%' -UseBasicParsing" >nul 2>&1
         if exist "%FFMPEG_ZIP%" (
             echo [✓] Download complete via PowerShell.
         ) else (
-            echo [X] PowerShell download failed. Trying bitsadmin...
+            echo [!] PowerShell download failed — using bitsadmin.
             bitsadmin /transfer ffmpeg /download /priority normal "%FFMPEG_URL%" "%FFMPEG_ZIP%"
         )
     ) else (
-        echo [!] PowerShell not available, using bitsadmin...
+        echo [!] PowerShell unavailable — using bitsadmin.
         bitsadmin /transfer ffmpeg /download /priority normal "%FFMPEG_URL%" "%FFMPEG_ZIP%"
     )
 
     if not exist "%FFMPEG_ZIP%" (
-        echo [X] Download failed. Check your internet connection.
-        pause
-        exit /b
+        echo [X] Download failed — please check your internet connection.
+        echo Press any key to close.
+        pause >nul
+        goto :EOF
     )
 )
 echo.
 
 ::-------------------------------------------------------
-:: 5. EXTRACT FFMPEG (FIXED)
+:: 5. EXTRACT FFMPEG (FIXED EXTRACTION)
 ::-------------------------------------------------------
-echo [2/5] Extracting FFmpeg to %INSTALL_DIR% ...
-if exist "%INSTALL_DIR%" rmdir /s /q "%INSTALL_DIR%"
+echo [2/5] Extracting FFmpeg...
 
+:: Clean up previous installation if it exists
+if exist "%INSTALL_DIR%" (
+    echo [i] Removing old installation folder...
+    rmdir /s /q "%INSTALL_DIR%"
+)
+
+:: Extract zip into download directory
 if not "%PWSH_EXE%"=="" (
     "%PWSH_EXE%" -NoProfile -ExecutionPolicy Bypass -Command ^
-        "Expand-Archive -Force -Path '%FFMPEG_ZIP%' -DestinationPath '%DOWNLOAD_DIR%'"
+        "Expand-Archive -Force -Path '%FFMPEG_ZIP%' -DestinationPath '%DOWNLOAD_DIR%'" >nul 2>&1
 ) else (
     echo [!] PowerShell not available, using tar fallback...
     tar -xf "%FFMPEG_ZIP%" -C "%DOWNLOAD_DIR%" >nul 2>&1
 )
 
-:: Find extracted folder inside download directory
+:: Locate extracted folder
 set "EXTRACTED_DIR="
 for /d %%i in ("%DOWNLOAD_DIR%\ffmpeg-*") do (
     set "EXTRACTED_DIR=%%i"
 )
 
 if not defined EXTRACTED_DIR (
-    echo [X] Could not find extracted folder in %DOWNLOAD_DIR%.
-    pause
-    exit /b
+    echo [X] Extraction failed — folder not found in %DOWNLOAD_DIR%.
+    echo Press any key to close.
+    pause >nul
+    goto :EOF
 )
 
-echo [i] Moving files from !EXTRACTED_DIR! to %INSTALL_DIR% ...
+:: Move extracted content
+echo [i] Moving FFmpeg to %INSTALL_DIR% ...
 mkdir "%INSTALL_DIR%" >nul 2>&1
 xcopy "!EXTRACTED_DIR!\*" "%INSTALL_DIR%\" /e /i /h /y >nul
 rmdir /s /q "!EXTRACTED_DIR!"
 
 if not exist "%INSTALL_DIR%\bin\ffmpeg.exe" (
-    echo [X] Extraction failed.
-    pause
-    exit /b
+    echo [X] Extraction failed — ffmpeg.exe not found.
+    echo Press any key to close.
+    pause >nul
+    goto :EOF
 )
-echo [✓] Extraction successful.
+
+echo [✓] Extraction completed successfully.
 echo.
 
 ::-------------------------------------------------------
@@ -136,7 +147,7 @@ set "addPath=%FFMPEG_BIN%"
 echo [3/5] Adding FFmpeg to PATH...
 
 if "%IS_ADMIN%"=="1" (
-    echo [*] Admin detected → Adding to SYSTEM PATH...
+    echo [*] Adding to SYSTEM PATH...
     for /f "tokens=2*" %%A in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul') do set "SysPath=%%B"
     echo !SysPath! | findstr /i /c:"%addPath%" >nul
     if !errorlevel! equ 1 (
@@ -146,12 +157,12 @@ if "%IS_ADMIN%"=="1" (
         echo [i] Already in SYSTEM PATH.
     )
 ) else (
-    echo [*] Standard user → Adding to USER PATH...
+    echo [*] Adding to USER PATH...
     echo %PATH% | findstr /i /c:"%addPath%" >nul
     if %errorlevel% equ 1 (
         setx PATH "%PATH%;%addPath%" >nul
         echo [✓] Added to USER PATH.
-        echo [!] Please open a NEW Command Prompt to apply changes.
+        echo [!] Open a NEW Command Prompt for the change to take effect.
     ) else (
         echo [i] Already in USER PATH.
     )
@@ -162,22 +173,25 @@ echo.
 :: 7. VERIFY INSTALLATION
 ::-------------------------------------------------------
 echo [4/5] Verifying installation...
-cmd /c "ffmpeg -version"
+cmd /c "ffmpeg -version" >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [!] FFmpeg not recognized yet. Try reopening Command Prompt or restarting your PC.
+    echo [!] FFmpeg not recognized yet. Try reopening Command Prompt or restart your PC.
 ) else (
-    echo [✓] FFmpeg successfully installed and added to PATH.
+    echo [✓] FFmpeg installed successfully and recognized.
 )
 echo.
 
 ::-------------------------------------------------------
-:: 8. DONE
+:: 8. COMPLETE
 ::-------------------------------------------------------
-echo [5/5] All steps completed successfully!
-echo [i] FFmpeg ZIP saved at: %FFMPEG_ZIP%
-echo [i] Installed in: %INSTALL_DIR%
-echo ======================================================
+echo [5/5] Installation complete!
+echo [i] FFmpeg location: %INSTALL_DIR%
+echo [i] ZIP saved at: %FFMPEG_ZIP%
+echo ------------------------------------------------------
 echo [DONE] FFmpeg installation finished successfully!
-echo ======================================================
-pause
+echo ------------------------------------------------------
+echo.
+echo Press any key to exit.
+pause >nul
+endlocal
 exit /b
