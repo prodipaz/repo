@@ -1,6 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
-title FFmpeg Auto Installer (PowerShell Auto-Fix)
+title FFmpeg Auto Installer (Stable Release)
 echo ======================================================
 echo              FFmpeg Auto Installer
 echo ======================================================
@@ -27,20 +27,17 @@ if %errorlevel% neq 0 (
 )
 
 ::-------------------------------------------------------
-:: 2. CHECK / FIX POWERSHELL AVAILABILITY
+:: 2. CHECK POWERSHELL AVAILABILITY
 ::-------------------------------------------------------
 echo [✓] Checking PowerShell availability...
 %PWSH_EXE% -Command "Write-Host 'PowerShell OK'" >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [!] 'powershell' command not found in PATH.
     if exist "%PWSH_PATH%" (
         echo [i] Found PowerShell at: %PWSH_PATH%
-        echo [i] Temporarily adding to PATH...
         set "PATH=%PATH%;C:\Windows\System32\WindowsPowerShell\v1.0"
         set "PWSH_EXE=%PWSH_PATH%"
     ) else (
-        echo [X] PowerShell not found on this system!
-        echo     This installer requires PowerShell to run.
+        echo [X] PowerShell not found. Please install it first.
         pause
         exit /b
     )
@@ -49,26 +46,9 @@ echo [✓] PowerShell ready.
 echo.
 
 ::-------------------------------------------------------
-:: 3. CHECK EXISTING FFMPEG
+:: 3. DOWNLOAD FFMPEG
 ::-------------------------------------------------------
-where ffmpeg >nul 2>&1
-if %errorlevel%==0 (
-    for /f "delims=" %%v in ('ffmpeg -version 2^>nul ^| findstr /r "^ffmpeg"') do set "FFMPEG_VER=%%v"
-    echo [i] Existing FFmpeg detected:
-    echo     !FFMPEG_VER!
-    echo.
-    choice /m "Do you want to reinstall FFmpeg?"
-    if errorlevel 2 (
-        echo [✓] Keeping existing FFmpeg installation.
-        pause
-        exit /b
-    )
-)
-
-::-------------------------------------------------------
-:: 4. DOWNLOAD FFMPEG
-::-------------------------------------------------------
-echo [1/5] Downloading FFmpeg...
+echo [1/5] Downloading FFmpeg stable build...
 "%PWSH_EXE%" -Command "Invoke-WebRequest '%FFMPEG_URL%' -OutFile '%FFMPEG_ZIP%'" || (
     echo [!] Download failed. Check your internet connection.
     pause
@@ -76,7 +56,7 @@ echo [1/5] Downloading FFmpeg...
 )
 
 ::-------------------------------------------------------
-:: 5. EXTRACT FFMPEG
+:: 4. EXTRACT
 ::-------------------------------------------------------
 echo [2/5] Extracting FFmpeg...
 if exist "%INSTALL_DIR%" rmdir /s /q "%INSTALL_DIR%"
@@ -89,16 +69,20 @@ if defined EXTRACTED_DIR (
 )
 
 ::-------------------------------------------------------
-:: 6. ADD TO SYSTEM PATH
+:: 5. ADD TO SYSTEM PATH (fixed)
 ::-------------------------------------------------------
 echo [3/5] Adding FFmpeg to system PATH...
+
 "%PWSH_EXE%" -NoProfile -ExecutionPolicy Bypass -Command ^
-"$path = [Environment]::GetEnvironmentVariable('Path','Machine');" ^
-"if ($path -notmatch [regex]::Escape('%FFMPEG_BIN%')) {" ^
-"    $newPath = $path + ';%FFMPEG_BIN%';" ^
-"    [Environment]::SetEnvironmentVariable('Path',$newPath,'Machine');" ^
-"    Write-Host '[✓] Added %FFMPEG_BIN% to PATH';" ^
-"} else {Write-Host '[i] Already in PATH';}"
+"[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;" ^
+"$ffpath='%FFMPEG_BIN%';" ^
+"$envPath=[Environment]::GetEnvironmentVariable('Path','Machine');" ^
+"if(-not($envPath -match [regex]::Escape($ffpath))){" ^
+"    [Environment]::SetEnvironmentVariable('Path',$envPath+';'+$ffpath,'Machine');" ^
+"    Write-Host '[✓] Added ' $ffpath ' to system PATH';" ^
+"}else{" ^
+"    Write-Host '[i] FFmpeg already in system PATH';" ^
+"}"
 
 if %errorlevel% neq 0 (
     echo [!] Failed to modify system PATH.
@@ -107,7 +91,7 @@ if %errorlevel% neq 0 (
 )
 
 ::-------------------------------------------------------
-:: 7. VERIFY INSTALLATION
+:: 6. VERIFY INSTALLATION
 ::-------------------------------------------------------
 echo.
 echo [4/5] Verifying installation...
@@ -119,7 +103,7 @@ if %errorlevel% neq 0 (
 )
 
 ::-------------------------------------------------------
-:: 8. CLEANUP
+:: 7. CLEANUP
 ::-------------------------------------------------------
 echo.
 echo [5/5] Cleaning up...
@@ -127,8 +111,7 @@ del "%FFMPEG_ZIP%" >nul 2>&1
 
 echo.
 echo ======================================================
-echo [DONE] FFmpeg installed in: %INSTALL_DIR%
-echo PowerShell verified and used successfully.
+echo [DONE] FFmpeg installed successfully in: %INSTALL_DIR%
 echo ======================================================
 pause
 exit /b
