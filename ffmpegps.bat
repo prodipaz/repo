@@ -1,6 +1,6 @@
 @echo off
-setlocal
-title FFmpeg Auto Installer (Final Safe Version)
+setlocal enabledelayedexpansion
+title FFmpeg Auto Installer (Debug Safe Version)
 echo ======================================================
 echo           FFmpeg Auto Installer (Stable Build)
 echo ======================================================
@@ -30,6 +30,7 @@ if %errorlevel% neq 0 (
 ::-------------------------------------------------------
 :: 2. CHECK POWERSHELL
 ::-------------------------------------------------------
+echo [*] Checking PowerShell...
 %PWSH_EXE% -Command "Write-Host 'PowerShell OK'" >nul 2>&1
 if %errorlevel% neq 0 (
     if exist "%PWSH_PATH%" (
@@ -49,8 +50,15 @@ echo.
 :: 3. DOWNLOAD FFMPEG
 ::-------------------------------------------------------
 echo [1/5] Downloading FFmpeg stable build...
-"%PWSH_EXE%" -Command "Invoke-WebRequest '%FFMPEG_URL%' -OutFile '%FFMPEG_ZIP%'" || (
-    echo [!] Download failed. Check your internet connection.
+if exist "%FFMPEG_ZIP%" del "%FFMPEG_ZIP%" >nul 2>&1
+
+"%PWSH_EXE%" -Command ^
+    "Write-Host '  -> Downloading...';" ^
+    "Invoke-WebRequest '%FFMPEG_URL%' -OutFile '%FFMPEG_ZIP%' -UseBasicParsing;" ^
+    "if (Test-Path '%FFMPEG_ZIP%') {Write-Host '  -> Download complete.'} else {Write-Host '  -> Download failed.'; exit 1}"
+
+if %errorlevel% neq 0 (
+    echo [X] Download failed. Check your internet connection.
     pause
     exit /b
 )
@@ -58,14 +66,27 @@ echo [1/5] Downloading FFmpeg stable build...
 ::-------------------------------------------------------
 :: 4. EXTRACT FFMPEG
 ::-------------------------------------------------------
-echo [2/5] Extracting FFmpeg...
+echo [2/5] Extracting FFmpeg to %INSTALL_DIR% ...
 if exist "%INSTALL_DIR%" rmdir /s /q "%INSTALL_DIR%"
-"%PWSH_EXE%" -Command "Expand-Archive -Force -Path '%FFMPEG_ZIP%' -DestinationPath '%INSTALL_DIR%'"
 
-for /d %%i in ("%INSTALL_DIR%\ffmpeg-*") do set "EXTRACTED_DIR=%%i"
+"%PWSH_EXE%" -NoProfile -ExecutionPolicy Bypass -Command ^
+    "Expand-Archive -Force -Path '%FFMPEG_ZIP%' -DestinationPath '%INSTALL_DIR%' ;" ^
+    "Write-Host '  -> Extracted archive.'"
+
+:: Handle unknown folder name (ffmpeg-*-essentials_build)
+set "EXTRACTED_DIR="
+for /d %%i in ("%INSTALL_DIR%\ffmpeg-*") do (
+    set "EXTRACTED_DIR=%%i"
+)
+
 if defined EXTRACTED_DIR (
-    xcopy "%EXTRACTED_DIR%\*" "%INSTALL_DIR%\" /e /i /h /y >nul
-    rmdir /s /q "%EXTRACTED_DIR%"
+    echo [i] Moving contents from !EXTRACTED_DIR! ...
+    xcopy "!EXTRACTED_DIR!\*" "%INSTALL_DIR%\" /e /i /h /y >nul
+    rmdir /s /q "!EXTRACTED_DIR!"
+) else (
+    echo [!] Could not find extracted folder — check zip contents.
+    pause
+    exit /b
 )
 
 ::-------------------------------------------------------
@@ -73,7 +94,6 @@ if defined EXTRACTED_DIR (
 ::-------------------------------------------------------
 echo [3/5] Adding FFmpeg to system PATH...
 
-:: Escape backslashes for PowerShell
 set "ESC_BIN=%FFMPEG_BIN:\=\\%>"
 
 > "%TMP_PS1%" (
