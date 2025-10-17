@@ -1,8 +1,8 @@
 @echo off
 setlocal
-title FFmpeg Auto Installer (Safe PATH Version)
+title FFmpeg Auto Installer (Final Safe Version)
 echo ======================================================
-echo              FFmpeg Auto Installer (Safe)
+echo           FFmpeg Auto Installer (Stable Build)
 echo ======================================================
 echo.
 
@@ -69,12 +69,15 @@ if defined EXTRACTED_DIR (
 )
 
 ::-------------------------------------------------------
-:: 5. ADD TO SYSTEM PATH (SAFE METHOD)
+:: 5. ADD TO SYSTEM PATH (SAFE)
 ::-------------------------------------------------------
 echo [3/5] Adding FFmpeg to system PATH...
 
+:: Escape backslashes for PowerShell
+set "ESC_BIN=%FFMPEG_BIN:\=\\%>"
+
 > "%TMP_PS1%" (
-    echo $ffpath = "%FFMPEG_BIN%"
+    echo $ffpath = "%ESC_BIN%"
     echo $envPath = [Environment]::GetEnvironmentVariable('Path','Machine')
     echo if (-not ($envPath -match [regex]::Escape($ffpath))) {
     echo     [Environment]::SetEnvironmentVariable('Path', $envPath + ';' + $ffpath, 'Machine')
