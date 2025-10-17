@@ -152,75 +152,56 @@ echo.
 
 
 :: -------------------------------------------------------
-:: 6. ADD TO USER PATH (Robust & Error-Logged)
+:: 6. ADD TO SYSTEM PATH (Simple Method using setx)
 :: -------------------------------------------------------
 set "ADD_PATH=C:\ffmpeg\bin"
-echo [*] Step 6: Adding %ADD_PATH% to the USER PATH...
-echo [*] Step 6: Starting PATH modification. >> "%LOGFILE%"
+
+:: This method requires Administrator rights to modify the System PATH.
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [X] CRITICAL ERROR: This script must be run as Administrator to use this PATH modification method.
+    echo [X] Please right-click the script and select "Run as administrator".
+    echo [X] Script aborted. >> "%LOGFILE%"
+    goto :EXIT
+)
+
+echo [*] Step 6: Adding %ADD_PATH% to the SYSTEM PATH...
+echo [*] Step 6: Starting SYSTEM PATH modification. >> "%LOGFILE%"
+echo.
+echo [!] WARNING: This method uses 'setx' which has a 1024 character limit.
+echo [!] If your System PATH is very long, it may be truncated (cut off).
 echo.
 
-:: Read the current user PATH from the registry.
-:: We use '2^>nul' to escape the '>' for the 'for' loop and suppress errors if the Path value doesn't exist.
-echo [*] Reading current USER PATH from registry... >> "%LOGFILE%"
-for /f "tokens=2*" %%A in ('reg query "HKCU\Environment" /v Path 2^>nul ^| findstr /i "Path"') do set "CURRENT_USER_PATH=%%B"
-
-:: Check if the Path value exists in the registry at all.
-if not defined CURRENT_USER_PATH (
-    echo [i] USER PATH registry entry not found. It will be created. >> "%LOGFILE%"
-    set "CURRENT_USER_PATH="
-)
-
-:: Check if the path is already present to prevent duplicates.
-:: We use findstr for a case-insensitive check. The >nul suppresses output.
-if defined CURRENT_USER_PATH (
-    echo [*] Checking if path already exists... >> "%LOGFILE%"
-    echo.%CURRENT_USER_PATH%| findstr /i /c:"%ADD_PATH%" >nul
-)
-
-:: If findstr returns an errorlevel of 1, the path was not found.
+:: Check if the path is already in the current session's PATH to avoid adding duplicates.
+echo %PATH% | findstr /i /c:"%ADD_PATH%" >nul
 if %errorlevel% neq 0 (
-    echo [*] Path not found in USER PATH. Adding it now...
-    echo [*] Path not found. Preparing to add. >> "%LOGFILE%"
+    echo [*] Path not found. Adding it now...
+    echo [*] Executing: setx /M PATH "%PATH%;%ADD_PATH%" >> "%LOGFILE%"
+    
+    :: Use setx to modify the System PATH for all users.
+    :: ALL output (stdout and stderr) is redirected to the log file.
+    setx /M PATH "%PATH%;%ADD_PATH%" >> "%LOGFILE%" 2>&1
 
-    :: If the user path is empty, just set it to our new path.
-    :: Otherwise, append it with a semicolon.
-    if not defined CURRENT_USER_PATH (
-        set "NEW_USER_PATH=%ADD_PATH%"
-        echo [*] USER PATH was empty. New path will be: %NEW_USER_PATH% >> "%LOGFILE%"
-    ) else (
-        set "NEW_USER_PATH=%CURRENT_USER_PATH%;%ADD_PATH%"
-        echo [*] Appending to existing path. New path will be: >> "%LOGFILE%"
-        echo %NEW_USER_PATH% >> "%LOGFILE%"
-    )
-    
-    :: Use 'reg add' to write the new path to the registry.
-    :: This is more reliable than 'setx' as it doesn't truncate long paths.
-    :: We use REG_EXPAND_SZ which is the correct type for the PATH variable.
-    :: ALL output (stdout and stderr) is redirected to the log file for debugging.
-    echo [*] Executing reg add command... >> "%LOGFILE%"
-    reg add "HKCU\Environment" /v Path /t REG_EXPAND_SZ /d "%NEW_USER_PATH%" /f >> "%LOGFILE%" 2>&1
-    
-    :: Check if the registry update was successful.
     if %errorlevel%==0 (
-        echo [✓] Successfully added %ADD_PATH% to the USER PATH.
-        echo [✓] Successfully added to USER PATH. >> "%LOGFILE%"
+        echo [✓] Successfully added %ADD_PATH% to the SYSTEM PATH.
+        echo [✓] Successfully added to SYSTEM PATH. >> "%LOGFILE%"
         echo [!] IMPORTANT: You must open a NEW Command Prompt window for this change to take effect.
     ) else (
-        echo [X] CRITICAL ERROR: Failed to update the USER PATH.
-        echo [X] CRITICAL ERROR: 'reg add' failed with errorlevel %errorlevel%. >> "%LOGFILE%"
-        echo [X] Check the end of the log file for the 'reg add' error message. >> "%LOGFILE%"
-        echo.
-        echo [!] The script will now exit to prevent further issues.
+        echo [X] CRITICAL ERROR: Failed to update the SYSTEM PATH.
+        echo [X] CRITICAL ERROR: 'setx' failed with errorlevel %errorlevel%. >> "%LOGFILE%"
+        echo [X] This might be due to permissions or the PATH being too long (truncated). >> "%LOGFILE%"
+        echo [!] The script will now exit.
         echo [!] Please check the log file: %LOGFILE%
         goto :EXIT
     )
 ) else (
-    echo [i] %ADD_PATH% already exists in the USER PATH. No changes needed.
+    echo [i] %ADD_PATH% already exists in the PATH. No changes needed.
     echo [i] Path already exists. No changes made. >> "%LOGFILE%"
 )
 echo.
 echo [*] Step 6: PATH modification complete. >> "%LOGFILE%"
 echo.
+
 
 :: -------------------------------------------------------
 :: 7. VERIFY
