@@ -151,21 +151,53 @@ echo [✓] Extraction successful.
 echo.
 
 :: -------------------------------------------------------
-:: 6. ADD TO PATH
+:: 6. ADD TO PATH (SAFE NO-TRUNCATE)
 :: -------------------------------------------------------
 set "addPath=%FFMPEG_BIN%"
-echo [*] Adding FFmpeg to PATH...
-echo [*] Adding FFmpeg to PATH... >> "%LOGFILE%"
-echo %PATH% | findstr /i /c:"%addPath%" >nul
-if %errorlevel% equ 1 (
-    setx PATH "%PATH%;%addPath%" >> "%LOGFILE%" 2>&1
-    echo [✓] Added to user PATH. Open new CMD to apply.
-    echo [✓] Added to user PATH. >> "%LOGFILE%"
+echo [*] Adding FFmpeg to PATH safely...
+echo [*] Adding FFmpeg to PATH safely... >> "%LOGFILE%"
+
+if "%IS_ADMIN%"=="1" (
+    echo     Adding to SYSTEM PATH...
+    for /f "tokens=2*" %%A in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul') do set "SysPath=%%B"
+    echo !SysPath! | findstr /i /c:"%addPath%" >nul
+    if !errorlevel! equ 1 (
+        set "NewPath=!SysPath!;%addPath%"
+        reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path /t REG_EXPAND_SZ /d "!NewPath!" /f >nul
+        if !errorlevel! equ 0 (
+            echo [✓] Added to SYSTEM PATH.
+            echo [✓] Added to SYSTEM PATH. >> "%LOGFILE%"
+        ) else (
+            echo [X] Failed to modify SYSTEM PATH.
+            echo [X] Failed to modify SYSTEM PATH. >> "%LOGFILE%"
+        )
+    ) else (
+        echo [i] Already in SYSTEM PATH.
+        echo [i] Already in SYSTEM PATH. >> "%LOGFILE%"
+    )
 ) else (
-    echo [i] Already in PATH.
-    echo [i] Already in PATH. >> "%LOGFILE%"
+    echo     Adding to USER PATH...
+    for /f "tokens=2*" %%A in ('reg query "HKCU\Environment" /v Path 2^>nul') do set "UserPath=%%B"
+    if not defined UserPath set "UserPath=%PATH%"
+    echo !UserPath! | findstr /i /c:"%addPath%" >nul
+    if !errorlevel! equ 1 (
+        set "NewUserPath=!UserPath!;%addPath%"
+        reg add "HKCU\Environment" /v Path /t REG_EXPAND_SZ /d "!NewUserPath!" /f >nul
+        if !errorlevel! equ 0 (
+            echo [✓] Added to USER PATH.
+            echo [✓] Added to USER PATH. >> "%LOGFILE%"
+            echo [!] Please open a NEW Command Prompt to apply changes.
+        ) else (
+            echo [X] Failed to update USER PATH.
+            echo [X] Failed to update USER PATH. >> "%LOGFILE%"
+        )
+    ) else (
+        echo [i] Already in USER PATH.
+        echo [i] Already in USER PATH. >> "%LOGFILE%"
+    )
 )
 echo.
+
 
 :: -------------------------------------------------------
 :: 7. VERIFY
